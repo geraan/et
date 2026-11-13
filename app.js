@@ -49,6 +49,7 @@
     userAnswer: '',
     audioIndex: 0,
     audioUnavailable: false,
+    preloadFailed: false,
     loadingMore: false,
     recording: null,        // { blobUrl, mime }
     recordingActive: false,
@@ -60,6 +61,7 @@
   let mediaStream = null;
   let chunks = [];
   let recorderToken = 0;
+  let preloadMode = false;
 
   // ---------- утилиты ----------
 
@@ -227,6 +229,7 @@ function resetExercise() {
   state.step = 'exercise';
   state.audioIndex = 0;
   state.audioUnavailable = false;
+  state.preloadFailed = false;
   stopApiAudio();
   discardRecording();
   hideHint();
@@ -308,21 +311,39 @@ function resetExercise() {
   function playApiAudio() {
     const item = currentItem();
     if (!item || state.audioUnavailable) return;
-    if (!item.audios.length) {
+    if (!item.audios.length || state.preloadFailed) {
       state.audioUnavailable = true;
       setError('Аудио недоступно для этого предложения.', false);
       renderState();
       return;
     }
     if (state.audioIndex >= item.audios.length) state.audioIndex = 0;
-    try {
-      el.apiAudio.src = item.audios[state.audioIndex];
-      el.apiAudio.load();
-    } catch (e) { /* ignore */ }
+    const url = item.audios[state.audioIndex];
+    preloadMode = false;
+    if (el.apiAudio.getAttribute('src') !== url) {
+      try {
+        el.apiAudio.preload = 'auto';
+        el.apiAudio.src = url;
+        el.apiAudio.load();
+      } catch (e) { /* ignore */ }
+    }
     el.apiAudio.play()
       .then(() => hideHint())
       .catch(() => showHint('Нажмите «Произношение (API)», чтобы прослушать произношение.'));
   }
+
+function preloadApiAudio() {
+  const item = currentItem();
+  if (!item || state.audioUnavailable || state.preloadFailed) return;
+  const url = item.audios[state.audioIndex];
+  if (!url || el.apiAudio.getAttribute('src') === url) return;
+  preloadMode = true;
+  try {
+    el.apiAudio.preload = 'auto';
+    el.apiAudio.src = url;
+    el.apiAudio.load();
+  } catch (e) { /* ignore */ }
+}
 
 function onApiAudioError() {
   const item = currentItem();
@@ -330,12 +351,21 @@ function onApiAudioError() {
   if (!item || state.audioUnavailable || !currentSrc) return;
   state.audioIndex++;
   if (state.audioIndex < item.audios.length) {
-    playApiAudio();
-  } else {
-    state.audioUnavailable = true;
-    setError('Аудио недоступно для этого предложения.', false);
-    renderState();
+    if (preloadMode && state.step === 'exercise') {
+      preloadApiAudio();
+    } else {
+      playApiAudio();
+    }
+    return;
   }
+  state.preloadFailed = true;
+  if (preloadMode && state.step === 'exercise') {
+    renderState();
+    return;
+  }
+  state.audioUnavailable = true;
+  setError('Аудио недоступно для этого предложения.', false);
+  renderState();
 }
 
   function onReplayApi() {
@@ -491,6 +521,8 @@ function onApiAudioError() {
       const item = currentItem();
       if (item) el.ruSentence.textContent = item.ruText;
     }
+
+    if (step === 'exercise') preloadApiAudio();
 
     const revealed = step === 'revealed';
     el.answerRow.classList.toggle('hidden', revealed);
