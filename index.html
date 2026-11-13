@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тренажёр английского — Tatoeba</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+    <header class="app-header">
+      <h1>Тренажёр английского</h1>
+      <p class="sub">Переведите русское предложение на английский и сверьтесь с оригиналом Tatoeba</p>
+    </header>
+
+    <section id="panel-word" class="panel hidden">
+      <label for="input-word">Введите английское слово или словосочетание</label>
+      <div class="row">
+        <input id="input-word" type="text" placeholder="например: hello" autocomplete="off" spellcheck="false">
+        <button id="btnSearch" class="primary" disabled>Найти</button>
+      </div>
+      <div id="spinner" class="spinner hidden" role="status" aria-label="Поиск..."></div>
+    </section>
+
+    <section id="panel-exercise" class="panel hidden">
+      <p class="label">Русское предложение — напишите английский перевод</p>
+      <blockquote id="ru-sentence" class="sentence"></blockquote>
+
+      <div id="answer-row" class="row">
+        <input id="input-answer" type="text" placeholder="Ваш английский перевод..." autocomplete="off" spellcheck="false">
+        <button id="btnCheck" class="primary">Проверить</button>
+      </div>
+
+      <div id="compare" class="compare hidden">
+        <p class="label">Проверьте себя</p>
+        <div class="compare-grid">
+          <div class="compare-cell">
+            <span class="tag">Ваш вариант</span>
+            <p id="your-answer" class="compare-text"></p>
+          </div>
+          <div class="compare-cell correct">
+            <span class="tag">Правильный вариант</span>
+            <p id="correct-answer" class="compare-text"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-audio" class="panel hidden">
+      <p class="label">Произношение</p>
+      <div class="btn-group">
+        <button id="btnReplayApi">Произношение (API)</button>
+        <button id="btnRecord">Записать моё произношение</button>
+        <button id="btnPlayMine" disabled>Моя запись</button>
+      </div>
+      <audio id="apiAudio" class="hidden" preload="auto"></audio>
+      <audio id="myAudio" class="hidden"></audio>
+    </section>
+
+    <section id="panel-nav" class="panel hidden">
+      <div class="btn-group">
+        <button id="btnNext" class="primary">Следующее предложение</button>
+        <button id="btnNewWord">Новое слово</button>
+      </div>
+    </section>
+
+    <p id="hint" class="hint hidden"></p>
+
+    <section id="panel-error" class="panel error-box hidden" role="alert">
+      <p id="error-text" class="error-text"></p>
+      <button id="btnRetry" class="hidden">Повторить</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
