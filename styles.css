@@ -27,6 +27,7 @@ body {
   align-items: flex-start;
   justify-content: center;
   padding: 40px 16px;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #app {
@@ -147,3 +148,23 @@ button.primary:hover:not(:disabled) { background: var(--accent-hover); }
   color: #8f2d2d;
 }
 .error-text { margin: 0 0 10px; }
+
+@media (max-width: 560px) {
+  #app { padding: 20px 16px; border-radius: 12px; }
+  .app-header h1 { font-size: 1.3rem; }
+  .row { flex-direction: column; }
+  .btn-group { flex-direction: column; }
+  button {
+    width: 100%;
+    min-height: 44px;
+    padding: 12px 14px;
+    font-size: 1rem;
+  }
+  input[type="text"] {
+    font-size: 16px;
+    min-height: 44px;
+    padding: 12px 14px;
+  }
+  .sentence { font-size: 1.3rem; }
+  .compare-text { font-size: 1rem; }
+}

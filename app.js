@@ -4,9 +4,9 @@
   const API_BASE = 'https://api.tatoeba.org/v1';
   const API_ORIGIN = 'https://api.tatoeba.org';
   const SEARCH_LIMIT = 20;
-  const FETCH_TIMEOUT_MS = 60000;
+  const FETCH_TIMEOUT_MS = 90000;
   const MAX_FOLLOW_PAGES = 4;
-  const RECORD_MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'];
+  const RECORD_MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/ogg;codecs=opus'];
 
   const $ = (id) => document.getElementById(id);
 
@@ -365,14 +365,36 @@ function onApiAudioError() {
       return;
     }
     stopRecorderSilently();
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      if (!devices.some((d) => d.kind === 'audioinput')) {
+        console.error('enumerateDevices: no audioinput devices');
+        setError('Микрофон не найден. Подключите устройство и проверьте, что доступ к нему разрешён в Параметрах Windows: Конфиденциальность → Микрофон.', false);
+        renderState();
+        return;
+      }
+    } catch (e) { /* ignore */ }
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
-      const denied = err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
-      setError(denied
-        ? 'Доступ к микрофону запрещён. Разрешите доступ в настройках браузера и попробуйте снова.'
-        : 'Не удалось получить доступ к микрофону.', false);
+      console.error('getUserMedia:', err);
+      const name = err && err.name;
+      let msg;
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        msg = 'Доступ к микрофону запрещён. Разрешите доступ в настройках браузера и попробуйте снова.';
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        msg = 'Микрофон не найден. Подключите устройство и проверьте, что доступ к нему разрешён в Параметрах Windows: Конфиденциальность → Микрофон.';
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        msg = 'Микрофон занят другим приложением или заблокирован системой. Закройте программы, использующие микрофон, и проверьте доступ в Параметрах Windows: Конфиденциальность → Микрофон.';
+      } else if (name === 'SecurityError') {
+        msg = 'Запись доступна только с защищённого соединения (https) или localhost.';
+      } else if (name === 'AbortError') {
+        msg = 'Запрос на доступ к микрофону прерван. Попробуйте ещё раз.';
+      } else {
+        msg = 'Не удалось получить доступ к микрофону (' + (name || 'unknown') + '). Проверьте микрофон и настройки операционной системы.';
+      }
+      setError(msg, false);
       renderState();
       return;
     }
