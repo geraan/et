@@ -7,6 +7,8 @@
   const FETCH_TIMEOUT_MS = 90000;
   const MAX_FOLLOW_PAGES = 4;
   const RECORD_MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/ogg;codecs=opus'];
+  const GTX_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t&q=';
+  const MYMEMORY_TRANSLATE_URL = 'https://api.mymemory.translated.net/get?q=';
 
   const $ = (id) => document.getElementById(id);
 
@@ -24,11 +26,14 @@
     inputAnswer: $('input-answer'),
     btnCheck: $('btnCheck'),
     compare: $('compare'),
+    yourCell: $('your-cell'),
     yourAnswer: $('your-answer'),
     correctAnswer: $('correct-answer'),
+    btnRetryAnswer: $('btnRetryAnswer'),
     apiAudio: $('apiAudio'),
     myAudio: $('myAudio'),
     btnReplayApi: $('btnReplayApi'),
+    autoBadge: $('auto-badge'),
     btnRecord: $('btnRecord'),
     btnPlayMine: $('btnPlayMine'),
     btnNext: $('btnNext'),
@@ -70,6 +75,17 @@
     return state.pool[state.cursor];
   }
 
+  function normalize(s) {
+    return s
+      .normalize('NFKC')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[.!?]+$/g, '')
+      .replace(/[«»“”‘’]/g, (c) => (c === '«' || c === '”' || c === '“') ? '"' : "'")
+      .replace(/\s*[-–—]\s*/g, ' ');
+  }
+
   function clearError() {
     state.error = null;
   }
@@ -104,12 +120,11 @@
 
   function buildPoolItem(raw) {
     const ruText = findRuTranslation(raw.translations);
-    if (!ruText) return null;
     const audios = (raw.audios || [])
       .filter((a) => a && (a.id || a.download_url))
       .map((a) => (a.id ? API_BASE + '/audios/' + a.id + '/file' : a.download_url));
     if (!audios.length) return null;
-    return { enId: raw.id, enText: raw.text, ruText, audios };
+    return { enId: raw.id, enText: raw.text, ruText, auto: !ruText, audios };
   }
 
   function appendPool(data) {
@@ -155,34 +170,39 @@
 
   async function performSearch(q) {
     resetPool();
-    for (const direct of [true, false]) {
+    const tiers = [
+      { params: [['trans:lang', 'rus'], ['trans:is_direct', 'yes']] },
+      { params: [['trans:lang', 'rus']] },
+      { params: [['!trans:lang', 'rus']] },
+    ];
+    let found = false;
+    for (const tier of tiers) {
+      if (state.pool.length >= SEARCH_LIMIT) break;
       const params = new URLSearchParams({
         q,
         lang: 'eng',
         has_audio: 'yes',
-        'trans:lang': 'rus',
         showtrans: 'matching',
         include: 'audios',
         sort: 'random',
         word_count: '-20',
         limit: String(SEARCH_LIMIT),
       });
-      if (direct) params.set('trans:is_direct', 'yes');
+      for (const [k, v] of tier.params) params.set(k, v);
 
       let data = await fetchTimeout(API_BASE + '/sentences?' + params.toString());
       let added = appendPool(data);
       let pages = 0;
-      while (added === 0 && state.srcNext && pages < MAX_FOLLOW_PAGES) {
+      while (added === 0 && state.srcNext && pages < MAX_FOLLOW_PAGES && state.pool.length < SEARCH_LIMIT) {
         const next = state.srcNext;
         state.srcNext = null;
         data = await fetchTimeout(resolveNext(next));
         added = appendPool(data);
         pages++;
       }
-      if (added > 0) return true;
-      resetPool();
+      if (added > 0) found = true;
     }
-    return false;
+    return found;
   }
 
   async function onSearch() {
@@ -218,6 +238,58 @@
   function onRetry() {
     if (!el.inputWord.value.trim() && state.query) el.inputWord.value = state.query;
     onSearch();
+  }
+
+  // ---------- машинный перевод ----------
+
+  function cachedRu(en) {
+    try { return window.localStorage.getItem('enru:' + en) || null; } catch (e) { return null; }
+  }
+
+  function storeRu(en, ru) {
+    try { window.localStorage.setItem('enru:' + en, ru); } catch (e) { /* ignore */ }
+  }
+
+  function parseGtx(data) {
+    if (!Array.isArray(data) || !Array.isArray(data[0])) return null;
+    const parts = data[0].filter((p) => Array.isArray(p) && typeof p[0] === 'string');
+    if (!parts.length) return null;
+    return parts.map((p) => p[0]).join('').trim();
+  }
+
+  function parseMyMemory(data) {
+    const t = data && data.responseData && data.responseData.translatedText;
+    return typeof t === 'string' && t ? t.trim() : null;
+  }
+
+  async function translateRu(en) {
+    const cached = cachedRu(en);
+    if (cached) return cached;
+    try {
+      const data = await fetchTimeout(GTX_TRANSLATE_URL + encodeURIComponent(en));
+      const ru = parseGtx(data);
+      if (ru) { storeRu(en, ru); return ru; }
+    } catch (e) { /* fallthrough */ }
+    try {
+      const data = await fetchTimeout(MYMEMORY_TRANSLATE_URL + encodeURIComponent(en) + '&langpair=en|ru');
+      const ru = parseMyMemory(data);
+      if (ru) { storeRu(en, ru); return ru; }
+    } catch (e) { /* fallthrough */ }
+    return null;
+  }
+
+  function prefetchTranslation(item) {
+    if (!item || item.ruText || item.pending || item.failed) return;
+    item.pending = true;
+    translateRu(item.enText).then(
+      (text) => {
+        item.pending = false;
+        item.ruText = text;
+        item.failed = !text;
+        if (currentItem() === item) renderState();
+      },
+      () => { item.pending = false; item.failed = true; if (currentItem() === item) renderState(); }
+    );
   }
 
   // ---------- упражнение ----------
@@ -329,7 +401,7 @@ function resetExercise() {
     }
     el.apiAudio.play()
       .then(() => hideHint())
-      .catch(() => showHint('Нажмите «Произношение (API)», чтобы прослушать произношение.'));
+      .catch(() => showHint('Нажмите «Произношение (носитель)», чтобы прослушать произношение.'));
   }
 
 function preloadApiAudio() {
@@ -367,6 +439,11 @@ function onApiAudioError() {
   setError('Аудио недоступно для этого предложения.', false);
   renderState();
 }
+
+  function onRetryAnswer() {
+    resetExercise();
+    renderState();
+  }
 
   function onReplayApi() {
     hideHint();
@@ -519,10 +596,25 @@ function onApiAudioError() {
 
     if (inExercise) {
       const item = currentItem();
-      if (item) el.ruSentence.textContent = item.ruText;
+      if (item) {
+        if (item.ruText) {
+          el.ruSentence.textContent = item.ruText;
+        } else if (item.failed) {
+          el.ruSentence.textContent = 'Перевод недоступен. Попробуйте другое предложение.';
+        } else {
+          el.ruSentence.textContent = 'Переводим…';
+        }
+        el.autoBadge.classList.toggle('hidden', !item.auto);
+      }
     }
 
-    if (step === 'exercise') preloadApiAudio();
+    if (step === 'exercise') {
+      preloadApiAudio();
+      const item = currentItem();
+      prefetchTranslation(item);
+      const nxt = state.pool[state.cursor + 1];
+      if (nxt) prefetchTranslation(nxt);
+    }
 
     const revealed = step === 'revealed';
     el.answerRow.classList.toggle('hidden', revealed);
@@ -531,10 +623,17 @@ function onApiAudioError() {
       const item = currentItem();
       el.yourAnswer.textContent = state.userAnswer || '(вы не ввели вариант)';
       el.correctAnswer.textContent = item ? item.enText : '';
+      const your = normalize(state.userAnswer);
+      const correct = item ? normalize(item.enText) : '';
+      const matched = your === correct && your !== '';
+      el.yourCell.classList.toggle('match', matched);
+      el.yourCell.classList.toggle('mismatch', !matched);
+    } else {
+      el.yourCell.classList.remove('match', 'mismatch');
     }
 
     el.btnReplayApi.disabled = state.audioUnavailable;
-    el.btnRecord.textContent = state.recordingActive ? '■ Остановить запись' : 'Записать моё произношение';
+    el.btnRecord.textContent = state.recordingActive ? '■ Остановить запись' : 'Записать моё';
     el.btnPlayMine.disabled = !state.recording;
 
     if (state.error) {
@@ -550,6 +649,7 @@ function onApiAudioError() {
   el.btnSearch.addEventListener('click', onSearch);
   el.inputAnswer.addEventListener('keydown', (e) => { if (e.key === 'Enter') onCheck(); });
   el.btnCheck.addEventListener('click', onCheck);
+  el.btnRetryAnswer.addEventListener('click', onRetryAnswer);
   el.btnNext.addEventListener('click', onNext);
   el.btnNewWord.addEventListener('click', onNewWord);
   el.btnReplayApi.addEventListener('click', onReplayApi);

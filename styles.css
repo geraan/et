@@ -122,6 +122,9 @@ button.primary:hover:not(:disabled) { background: var(--accent-hover); }
   background: #f9fbfd;
 }
 .compare-cell.correct { background: var(--good-bg); border-color: #b5e4cb; }
+.compare-cell.match { background: var(--good-bg); border-color: #b5e4cb; }
+.compare-cell.mismatch { background: #fdeaea; border-color: #f3c1c4; }
+.retry-group { margin-top: 12px; }
 
 .tag {
   display: inline-block;
@@ -133,6 +136,17 @@ button.primary:hover:not(:disabled) { background: var(--accent-hover); }
   margin-bottom: 8px;
 }
 .compare-cell.correct .tag { color: var(--good); }
+
+.tag.auto {
+  display: inline-block;
+  margin: 4px 0 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  text-transform: none;
+  letter-spacing: normal;
+  background: #eef2f7;
+}
 
 .compare-text { margin: 0; font-size: 1.05rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
 .compare-cell.correct .compare-text { color: #0d7a49; }

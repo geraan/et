@@ -28,6 +28,7 @@
     <section id="panel-exercise" class="panel hidden">
       <p class="label">Русское предложение — напишите английский перевод</p>
       <blockquote id="ru-sentence" class="sentence"></blockquote>
+      <p id="auto-badge" class="tag auto hidden">*автоперевод*</p>
 
       <div id="answer-row" class="row">
         <input id="input-answer" type="text" placeholder="Ваш английский перевод..." autocomplete="off" spellcheck="false">
@@ -37,7 +38,7 @@
       <div id="compare" class="compare hidden">
         <p class="label">Проверьте себя</p>
         <div class="compare-grid">
-          <div class="compare-cell">
+          <div id="your-cell" class="compare-cell">
             <span class="tag">Ваш вариант</span>
             <p id="your-answer" class="compare-text"></p>
           </div>
@@ -46,15 +47,18 @@
             <p id="correct-answer" class="compare-text"></p>
           </div>
         </div>
+        <div class="btn-group retry-group">
+          <button id="btnRetryAnswer">Повторить</button>
+        </div>
       </div>
     </section>
 
     <section id="panel-audio" class="panel hidden">
       <p class="label">Произношение</p>
       <div class="btn-group">
-        <button id="btnReplayApi">Произношение (API)</button>
-        <button id="btnRecord">Записать моё произношение</button>
-        <button id="btnPlayMine" disabled>Моя запись</button>
+        <button id="btnReplayApi">Произношение (носитель)</button>
+        <button id="btnRecord">Записать моё</button>
+        <button id="btnPlayMine" disabled>Моё произношение</button>
       </div>
       <audio id="apiAudio" class="hidden" preload="auto"></audio>
       <audio id="myAudio" class="hidden"></audio>
